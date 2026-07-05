@@ -17,6 +17,7 @@ import os
 import re
 import json
 import time
+import base64
 import datetime
 import xml.sax.saxutils as saxutils
 
@@ -32,7 +33,7 @@ EPISODES_JSON = os.path.join(DOCS_DIR, "episodes.json")
 FEED_XML = os.path.join(DOCS_DIR, "feed.xml")
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
+GOOGLE_TTS_API_KEY = os.environ.get("GOOGLE_TTS_API_KEY")
 # The public base URL where docs/ ends up being served, e.g.
 # https://yourusername.github.io/podcast-pipeline
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
@@ -121,45 +122,42 @@ def call_anthropic(prompt, model):
     return json.loads(text)
 
 
-def synthesize_turn(text, voice_id, model_id):
+def synthesize_turn(text, voice_name, language_code):
     resp = requests.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-        headers={
-            "xi-api-key": ELEVENLABS_API_KEY,
-            "content-type": "application/json",
-            "accept": "audio/mpeg",
-        },
+        f"https://texttospeech.googleapis.com/v1/text:synthesize?key={GOOGLE_TTS_API_KEY}",
+        headers={"content-type": "application/json"},
         json={
-            "text": text,
-            "model_id": model_id,
-            "voice_settings": {"stability": 0.45, "similarity_boost": 0.8},
+            "input": {"text": text},
+            "voice": {"languageCode": language_code, "name": voice_name},
+            "audioConfig": {"audioEncoding": "MP3"},
         },
         timeout=120,
     )
     resp.raise_for_status()
-    return resp.content
+    audio_b64 = resp.json()["audioContent"]
+    return base64.b64decode(audio_b64)
 
 
-def build_episode_audio(turns, hosts_by_name, model_id, out_path):
-    voice_map = {h["name"]: h["voice_id"] for h in hosts_by_name}
+def build_episode_audio(turns, hosts_by_name, language_code, out_path):
+    voice_map = {h["name"]: h["voice_name"] for h in hosts_by_name}
     combined = AudioSegment.silent(duration=300)
     pause = AudioSegment.silent(duration=350)
     tmp_dir = os.path.join(ROOT, "_tmp_audio")
     os.makedirs(tmp_dir, exist_ok=True)
 
     for i, turn in enumerate(turns):
-        voice_id = voice_map.get(turn["speaker"])
-        if not voice_id or "REPLACE_WITH" in voice_id:
+        voice_name = voice_map.get(turn["speaker"])
+        if not voice_name:
             raise RuntimeError(
-                f"No valid ElevenLabs voice_id configured for speaker '{turn['speaker']}'. "
-                "Edit config.json 'hosts' with real voice IDs."
+                f"No voice configured for speaker '{turn['speaker']}'. "
+                "Edit config.json 'hosts' with real Google TTS voice names."
             )
-        audio_bytes = synthesize_turn(turn["text"], voice_id, model_id)
+        audio_bytes = synthesize_turn(turn["text"], voice_name, language_code)
         seg_path = os.path.join(tmp_dir, f"seg_{i}.mp3")
         with open(seg_path, "wb") as f:
             f.write(audio_bytes)
         combined += AudioSegment.from_mp3(seg_path) + pause
-        time.sleep(0.5)  # be gentle on rate limits
+        time.sleep(0.3)  # be gentle on rate limits
 
     combined.export(out_path, format="mp3")
 
@@ -201,8 +199,8 @@ def update_feed(config, episode_meta):
 
 
 def main():
-    if not ANTHROPIC_API_KEY or not ELEVENLABS_API_KEY:
-        raise SystemExit("Set ANTHROPIC_API_KEY and ELEVENLABS_API_KEY environment variables.")
+    if not ANTHROPIC_API_KEY or not GOOGLE_TTS_API_KEY:
+        raise SystemExit("Set ANTHROPIC_API_KEY and GOOGLE_TTS_API_KEY environment variables.")
 
     config = load_config()
     os.makedirs(EPISODES_DIR, exist_ok=True)
@@ -220,8 +218,8 @@ def main():
     mp3_name = f"{today}.mp3"
     mp3_path = os.path.join(EPISODES_DIR, mp3_name)
 
-    print("Generating audio with ElevenLabs...")
-    build_episode_audio(turns, config["hosts"], config["elevenlabs_model"], mp3_path)
+    print("Generating audio with Google Cloud TTS...")
+    build_episode_audio(turns, config["hosts"], config["google_tts_language_code"], mp3_path)
 
     file_size = os.path.getsize(mp3_path)
     audio_url = f"{PUBLIC_BASE_URL}/episodes/{mp3_name}" if PUBLIC_BASE_URL else f"episodes/{mp3_name}"
