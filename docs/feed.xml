@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>AI &amp; UK Property: The Daily Briefing</title>
+    <description>A daily two-host discussion on how AI is changing UK estate agency and conveyancing.</description>
+    <language>en-gb</language>
+    <itunes:author>Rich</itunes:author>
+    <itunes:explicit>false</itunes:explicit>
+    <item>
+      <title>AI &amp; UK Property: The Daily Briefing — 2026-07-20</title>
+      <description>Today's AI-in-property discussion, generated from the day's UK estate agency and conveyancing news.</description>
+      <pubDate>Mon, 20 Jul 2026 16:44:08 GMT</pubDate>
+      <enclosure url="https://github.com/richiep540/ai-property-podcast/episodes/2026-07-20.mp3" length="1995693" type="audio/mpeg" />
+      <guid isPermaLink="false">episode-2026-07-20</guid>
+    </item>
+  </channel>
+</rss>
