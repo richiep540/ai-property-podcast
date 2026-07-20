@@ -108,7 +108,7 @@ def call_anthropic(prompt, model):
         },
         json={
             "model": model,
-            "max_tokens": 4000,
+            "max_tokens": 8000,
             "messages": [{"role": "user", "content": prompt}],
         },
         timeout=120,
