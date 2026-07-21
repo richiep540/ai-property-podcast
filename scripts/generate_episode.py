@@ -183,7 +183,7 @@ def update_feed(config, episode_meta):
       <guid isPermaLink="false">{ep['guid']}</guid>
     </item>"""
 
- cover_url = f"{PUBLIC_BASE_URL}/{config['cover_image']}" if PUBLIC_BASE_URL else config['cover_image']
+    cover_url = f"{PUBLIC_BASE_URL}/{config['cover_image']}" if PUBLIC_BASE_URL else config['cover_image']
 
     feed_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
