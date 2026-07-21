@@ -6,6 +6,18 @@
     <language>en-gb</language>
     <itunes:author>Rich</itunes:author>
     <itunes:explicit>false</itunes:explicit>
+    <itunes:image href="https://richiep540.github.io/ai-property-podcast/cover.jpg" />
+    <image>
+      <url>https://richiep540.github.io/ai-property-podcast/cover.jpg</url>
+      <title>AI &amp; UK Property: The Daily Briefing</title>
+    </image>
+    <item>
+      <title>AI &amp; UK Property: The Daily Briefing — 2026-07-21</title>
+      <description>Today's AI-in-property discussion, generated from the day's UK estate agency and conveyancing news.</description>
+      <pubDate>Tue, 21 Jul 2026 08:25:54 GMT</pubDate>
+      <enclosure url="https://richiep540.github.io/ai-property-podcast/episodes/2026-07-21.mp3" length="2032941" type="audio/mpeg" />
+      <guid isPermaLink="false">episode-2026-07-21</guid>
+    </item>
     <item>
       <title>AI &amp; UK Property: The Daily Briefing — 2026-07-20</title>
       <description>Today's AI-in-property discussion, generated from the day's UK estate agency and conveyancing news.</description>
