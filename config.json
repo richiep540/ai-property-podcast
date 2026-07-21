@@ -16,5 +16,6 @@
   ],
   "anthropic_model": "claude-sonnet-5",
   "google_tts_language_code": "en-GB",
-  "target_word_count": 1400
+  "target_word_count": 1400,
+  "cover_image": "cover.jpg"
 }
