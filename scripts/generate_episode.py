@@ -183,6 +183,8 @@ def update_feed(config, episode_meta):
       <guid isPermaLink="false">{ep['guid']}</guid>
     </item>"""
 
+ cover_url = f"{PUBLIC_BASE_URL}/{config['cover_image']}" if PUBLIC_BASE_URL else config['cover_image']
+
     feed_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
   <channel>
@@ -190,7 +192,12 @@ def update_feed(config, episode_meta):
     <description>{saxutils.escape(config['podcast_description'])}</description>
     <language>{config['podcast_language']}</language>
     <itunes:author>{saxutils.escape(config['podcast_author'])}</itunes:author>
-    <itunes:explicit>false</itunes:explicit>{items_xml}
+    <itunes:explicit>false</itunes:explicit>
+    <itunes:image href="{saxutils.escape(cover_url)}" />
+    <image>
+      <url>{saxutils.escape(cover_url)}</url>
+      <title>{saxutils.escape(config['podcast_title'])}</title>
+    </image>{items_xml}
   </channel>
 </rss>
 """
