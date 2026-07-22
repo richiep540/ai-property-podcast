@@ -68,7 +68,29 @@ def collect_recent_items(feeds, lookback_hours):
                 "source": parsed.feed.get("title", url),
             })
     return items
+HISTORY_PATH = os.path.join(DOCS_DIR, "covered_links.json")
 
+
+def load_covered_links(days):
+    if not os.path.exists(HISTORY_PATH):
+        return set()
+    with open(HISTORY_PATH) as f:
+        history = json.load(f)
+    cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    return {h["link"] for h in history if h["date"] >= cutoff}
+
+
+def save_covered_links(items, days):
+    history = []
+    if os.path.exists(HISTORY_PATH):
+        with open(HISTORY_PATH) as f:
+            history = json.load(f)
+    today = datetime.date.today().isoformat()
+    history.extend({"link": it["link"], "date": today} for it in items)
+    cutoff = (datetime.date.today() - datetime.timedelta(days=days * 2)).isoformat()
+    history = [h for h in history if h["date"] >= cutoff]
+    with open(HISTORY_PATH, "w") as f:
+        json.dump(history, f, indent=2)
 
 def build_script_prompt(items, config):
     stories_text = "\n\n".join(
