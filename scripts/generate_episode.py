@@ -241,9 +241,10 @@ def main():
     os.makedirs(EPISODES_DIR, exist_ok=True)
 
     print("Fetching feeds...")
-    items = collect_recent_items(config["feeds"], config["lookback_hours"])
-    print(f"Found {len(items)} recent items.")
-
+    all_items = collect_recent_items(config["feeds"], config["lookback_hours"])
+    covered = load_covered_links(config.get("history_days", 7))
+    items = [it for it in all_items if it["link"] not in covered] or all_items
+    print(f"Found {len(all_items)} recent items, {len(items)} not yet covered.")
     print("Writing script with Claude...")
     prompt = build_script_prompt(items, config)
     turns = call_anthropic(prompt, config["anthropic_model"])
@@ -270,6 +271,7 @@ def main():
 
     print("Updating feed.xml...")
     update_feed(config, episode_meta)
+    save_covered_links(items, config.get("history_days", 7))
     print("Done.")
 
 
