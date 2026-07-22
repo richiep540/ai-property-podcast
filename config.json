@@ -11,8 +11,8 @@
     "https://www.legalfutures.co.uk/feed"
   ],
   "hosts": [
-    { "name": "Alex", "voice_name": "en-GB-Wavenet-B" },
-    { "name": "Sam", "voice_name": "en-GB-Wavenet-A" }
+    { "name": "Alex", "voice_name": "en-GB-Chirp3-HD-Schedar" },
+    { "name": "Sam", "voice_name": "en-GB-Chirp3-HD-Sulafat" }
   ],
   "anthropic_model": "claude-sonnet-5",
   "google_tts_language_code": "en-GB",
