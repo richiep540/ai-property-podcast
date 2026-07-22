@@ -3,12 +3,16 @@
   "podcast_description": "A daily two-host discussion on how AI is changing UK estate agency and conveyancing.",
   "podcast_author": "Rich",
   "podcast_language": "en-gb",
-  "lookback_hours": 36,
+  "lookback_hours": 48,
+  "history_days": 7,
   "feeds": [
     "https://www.estateagenttoday.co.uk/newsfeeds",
     "https://todaysconveyancer.co.uk/feed",
     "https://propertyindustryeye.com/feed",
-    "https://www.legalfutures.co.uk/feed"
+    "https://www.legalfutures.co.uk/feed",
+    "https://www.property118.com/feed",
+    "https://www.mortgagestrategy.co.uk/feed",
+    "https://techcrunch.com/category/artificial-intelligence/feed/"
   ],
   "hosts": [
     { "name": "Alex", "voice_name": "en-GB-Chirp3-HD-Schedar" },
@@ -16,6 +20,6 @@
   ],
   "anthropic_model": "claude-sonnet-5",
   "google_tts_language_code": "en-GB",
-  "target_word_count": 1400,
+  "target_word_count": 2200,
   "cover_image": "cover.jpg"
 }
