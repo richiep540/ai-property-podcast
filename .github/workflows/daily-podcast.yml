@@ -40,4 +40,5 @@ jobs:
           git config user.email "podcast-bot@users.noreply.github.com"
           git add docs/
           git commit -m "Add episode for $(date +'%Y-%m-%d')" || echo "Nothing to commit"
+          git pull --rebase origin main
           git push
