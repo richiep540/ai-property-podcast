@@ -78,20 +78,26 @@ def build_script_prompt(items, config):
 
     host_a, host_b = config["hosts"][0]["name"], config["hosts"][1]["name"]
 
-    return f"""You write scripts for a short daily two-host podcast called
+    return f"""You write scripts for a daily two-host podcast called
 "{config['podcast_title']}". The hosts are {host_a} and {host_b}. Their beat is:
-how AI is changing UK estate agency and UK conveyancing.
+how AI is changing UK estate agency and UK conveyancing, with a wider eye on
+UK property, mortgages, and general AI industry news that could plausibly
+affect the sector.
 
-Here are today's candidate stories from UK property/conveyancing trade press:
+Here are today's candidate stories, none of which have been covered in the
+last several episodes:
 
 {stories_text}
 
-Write a natural, engaging conversation between {host_a} and {host_b} (~{config['target_word_count']} words)
-covering the stories that are actually relevant to AI, proptech, or automation in
-estate agency/conveyancing. If few stories are directly about AI, pick the most
-relevant industry news and discuss what AI's impact on it might be. Keep it
-conversational, informative, and not repetitive of each other. Include a short
-intro (welcome + today's date) and a short sign-off.
+Write a natural, engaging, WIDE-RANGING conversation between {host_a} and {host_b}
+(~{config['target_word_count']} words) covering several distinct stories and
+angles rather than dwelling on just one. Vary the structure day to day —
+sometimes lead with the most significant story, sometimes open with a quick
+round-up before going deeper on one or two; occasionally include a short
+'quick takes' segment on smaller stories. If few stories are directly about
+AI, discuss what AI's impact on the story's topic might be. Keep it
+conversational and avoid the hosts repeating each other's points. Include a
+short intro (welcome + today's date) and a short sign-off.
 
 Respond with ONLY a JSON array, no other text, no markdown fences. Each element:
 {{"speaker": "{host_a}" or "{host_b}", "text": "..."}}
