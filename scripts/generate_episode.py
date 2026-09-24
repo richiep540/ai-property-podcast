@@ -18,6 +18,7 @@ import re
 import json
 import time
 import base64
+import random
 import datetime
 import xml.sax.saxutils as saxutils
 
@@ -140,12 +141,12 @@ def add_fixed_bookends(turns, config):
     """
     host = config["hosts"][0]["name"]
     intro = [
-        {"speaker": host, "text": config[key].strip()}
+        {"speaker": host, "text": config[key].strip(), "fixed": True}
         for key in ("sponsor_intro_text", "disclaimer_text")
         if (config.get(key) or "").strip()
     ]
     outro = [
-        {"speaker": host, "text": config["sponsor_outro_text"].strip()}
+        {"speaker": host, "text": config["sponsor_outro_text"].strip(), "fixed": True}
     ] if (config.get("sponsor_outro_text") or "").strip() else []
     return intro + turns + outro
 
@@ -190,10 +191,40 @@ def synthesize_turn(text, voice_name, language_code):
     return base64.b64decode(audio_b64)
 
 
-def build_episode_audio(turns, hosts_by_name, language_code, out_path):
+def gap_after(turn, next_turn, base, rng):
+    """How long to leave before the next turn.
+
+    An identical pause after every turn is most of what makes stitched speech
+    sound mechanical - real conversation has a rhythm. A two-word reaction comes
+    back almost instantly, a question leaves a beat before the answer, and the
+    same speaker carrying on barely pauses at all.
+    """
+    if turn.get("fixed") or (next_turn is not None and next_turn.get("fixed")):
+        # The sponsor read and disclaimer are separate statements, not conversation.
+        # They need a clear beat around them, even though one host reads both.
+        return int(base * 2.0)
+
+    text = turn["text"].rstrip()
+    words = len(text.split())
+    if next_turn is not None and next_turn["speaker"] == turn["speaker"]:
+        scale = 0.35          # same voice continuing - just a breath
+    elif words <= 4:
+        scale = 0.45          # "Go on." - the reply lands on top of it
+    elif text.endswith("?"):
+        scale = 1.3           # let a question hang
+    elif text.endswith(("...", "-")):
+        scale = 0.4           # trailing off, interrupted
+    else:
+        scale = 1.0
+    return max(90, int(base * scale * rng.uniform(0.82, 1.22)))
+
+
+def build_episode_audio(turns, hosts_by_name, language_code, out_path, config):
     voice_map = {h["name"]: h["voice_name"] for h in hosts_by_name}
     combined = AudioSegment.silent(duration=300)
-    pause = AudioSegment.silent(duration=350)
+    base_gap = config.get("turn_gap_ms", 320)
+    # Seeded per episode so a given script always stitches identically.
+    rng = random.Random(f"{config['podcast_title']}-{datetime.date.today().isoformat()}")
     tmp_dir = os.path.join(ROOT, "_tmp_audio")
     os.makedirs(tmp_dir, exist_ok=True)
 
@@ -208,7 +239,9 @@ def build_episode_audio(turns, hosts_by_name, language_code, out_path):
         seg_path = os.path.join(tmp_dir, f"seg_{i}.mp3")
         with open(seg_path, "wb") as f:
             f.write(audio_bytes)
-        combined += AudioSegment.from_mp3(seg_path) + pause
+        combined += AudioSegment.from_mp3(seg_path) + AudioSegment.silent(
+            duration=gap_after(turn, turns[i + 1] if i + 1 < len(turns) else None, base_gap, rng)
+        )
         time.sleep(0.3)  # be gentle on rate limits
 
     combined.export(out_path, format="mp3")
@@ -280,7 +313,7 @@ def main():
     mp3_path = os.path.join(EPISODES_DIR, mp3_name)
 
     print("Generating audio with Google Cloud TTS...")
-    build_episode_audio(turns, config["hosts"], config["google_tts_language_code"], mp3_path)
+    build_episode_audio(turns, config["hosts"], config["google_tts_language_code"], mp3_path, config)
 
     file_size = os.path.getsize(mp3_path)
     audio_url = f"{PUBLIC_BASE_URL}/episodes/{mp3_name}" if PUBLIC_BASE_URL else f"episodes/{mp3_name}"
