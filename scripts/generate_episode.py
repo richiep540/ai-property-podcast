@@ -191,6 +191,19 @@ def synthesize_turn(text, voice_name, language_code):
     return base64.b64decode(audio_b64)
 
 
+def apply_pronunciations(text, config):
+    """Respell words the voice says wrong, just before synthesis.
+
+    Chirp 3: HD does not support SSML, so there is no phoneme tag to reach for -
+    changing the spelling the engine sees is the only lever. Applied at synthesis
+    time only, so the written form stays correct in the script, the transcript,
+    the show notes and the RSS feed.
+    """
+    for written, spoken in (config.get("pronunciations") or {}).items():
+        text = re.sub(rf"\b{re.escape(written)}\b", spoken, text, flags=re.I)
+    return text
+
+
 def gap_after(turn, next_turn, base, rng):
     """How long to leave before the next turn.
 
@@ -235,7 +248,8 @@ def build_episode_audio(turns, hosts_by_name, language_code, out_path, config):
                 f"No voice configured for speaker '{turn['speaker']}'. "
                 "Edit config.json 'hosts' with real Google TTS voice names."
             )
-        audio_bytes = synthesize_turn(turn["text"], voice_name, language_code)
+        spoken = apply_pronunciations(turn["text"], config)
+        audio_bytes = synthesize_turn(spoken, voice_name, language_code)
         seg_path = os.path.join(tmp_dir, f"seg_{i}.mp3")
         with open(seg_path, "wb") as f:
             f.write(audio_bytes)
