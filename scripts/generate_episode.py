@@ -247,6 +247,20 @@ def build_episode_audio(turns, hosts_by_name, language_code, out_path, config):
     combined.export(out_path, format="mp3")
 
 
+def tracked_url(url, config):
+    """Wrap an episode URL in a download-analytics prefix.
+
+    GitHub Pages keeps no access logs, so without a prefix there is no way to
+    know whether anyone is listening. Applied when the feed is written rather
+    than when the URL is stored, so past episodes are counted too and removing
+    the prefix is a config change rather than a migration.
+    """
+    prefix = (config.get("download_prefix") or "").strip()
+    if not prefix or not url.startswith("http"):
+        return url
+    return prefix.rstrip("/") + "/" + url
+
+
 def update_feed(config, episode_meta):
     os.makedirs(DOCS_DIR, exist_ok=True)
     episodes = []
@@ -259,12 +273,13 @@ def update_feed(config, episode_meta):
 
     items_xml = ""
     for ep in episodes:
+        audio = tracked_url(ep["audio_url"], config)
         items_xml += f"""
     <item>
       <title>{saxutils.escape(ep['title'])}</title>
       <description>{saxutils.escape(ep['description'])}</description>
       <pubDate>{ep['pub_date']}</pubDate>
-      <enclosure url="{saxutils.escape(ep['audio_url'])}" length="{ep['file_size']}" type="audio/mpeg" />
+      <enclosure url="{saxutils.escape(audio)}" length="{ep['file_size']}" type="audio/mpeg" />
       <guid isPermaLink="false">{ep['guid']}</guid>
     </item>"""
 
