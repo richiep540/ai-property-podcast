@@ -2,8 +2,9 @@ name: Daily Podcast
 
 on:
   schedule:
-    # 06:30 UTC every day — edit the cron time if you'd like it earlier/later
-    - cron: "30 6 * * *"
+    # 06:30 UTC, Monday to Friday. Property trade press barely publishes at
+    # weekends, and Monday's episode picks up anything that did.
+    - cron: "30 6 * * 1-5"
   workflow_dispatch: {}  # lets you also trigger it manually from the Actions tab
 
 permissions:

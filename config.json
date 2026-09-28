@@ -3,7 +3,7 @@
   "podcast_description": "A daily two-host discussion on how AI is changing UK estate agency and conveyancing.",
   "podcast_author": "Rich",
   "podcast_language": "en-gb",
-  "lookback_hours": 48,
+  "lookback_hours": 76,
   "history_days": 7,
   "feeds": [
     "https://www.estateagenttoday.co.uk/newsfeeds",
