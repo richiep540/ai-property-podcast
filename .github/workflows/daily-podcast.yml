@@ -28,6 +28,10 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      # Cheap guard: catches a broken script before it burns API credit.
+      - name: Run offline checks
+        run: python tests/test_offline.py
+
       - name: Generate today's episode
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

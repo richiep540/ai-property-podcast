@@ -35,5 +35,7 @@
   "download_prefix": "https://op3.dev/e/",
   "pronunciations": {
     "Dezrez": "Dez Rez"
-  }
+  },
+  "corrections_email": "richp9284@gmail.com",
+  "corrections_policy": "Corrections: this briefing is produced by AI and can get things wrong. If you spot an error, email {email} and we will correct it in the next episode and update these notes."
 }

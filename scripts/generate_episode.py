@@ -45,9 +45,41 @@ def load_config():
         return json.load(f)
 
 
+# Feed text goes straight into the model prompt, so a headline or summary carrying
+# instructions is a prompt-injection route into a show that publishes unattended.
+# Established trade press is unlikely to try it; the Google News feed pulls from
+# whoever ranks that day, which is where this actually earns its keep.
+INJECTION_PATTERNS = [re.compile(p, re.I | re.M) for p in (
+    r"ignore\s+(?:all\s+|any\s+)?(?:the\s+)?(?:previous|prior|above|earlier|preceding)\s+"
+    r"(?:\w+\s+)?(?:instruction|prompt|direction|rule|message)",
+    r"disregard\s+(?:all\s+|any\s+)?(?:the\s+)?(?:previous|prior|above|earlier|preceding)\s+"
+    r"(?:\w+\s+)?(?:instruction|prompt|direction|rule|message)",
+    r"forget\s+(?:everything|all\s+(?:previous|prior)|your\s+(?:instruction|prompt|rule))",
+    r"\bsystem\s+prompt\b",
+    r"\bnew\s+instructions?\s*:",
+    r"\b(?:you\s+are\s+now|act\s+as|pretend\s+to\s+be|roleplay\s+as)\s+(?:an?\s+)?"
+    r"(?:ai|assistant|language\s+model|chatbot)\b",
+    r"</?(?:system|assistant|user|instructions?)>",
+    r"^\s*(?:system|assistant|user)\s*:",
+    r"respond\s+(?:only\s+)?with\s+(?:the\s+following|only|json)",
+    r"\boutput\s+only\b",
+    r"```",
+    r'"speaker"\s*:',
+)]
+
+
+def injection_risk(text):
+    """Return the pattern that fired on this text, or None if it looks clean."""
+    for pattern in INJECTION_PATTERNS:
+        if pattern.search(text or ""):
+            return pattern.pattern
+    return None
+
+
 def collect_recent_items(feeds, lookback_hours):
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=lookback_hours)
     items = []
+    quarantined = []
     for url in feeds:
         try:
             parsed = feedparser.parse(url)
@@ -62,12 +94,25 @@ def collect_recent_items(feeds, lookback_hours):
                     break
             if published and published < cutoff:
                 continue
+            title = getattr(entry, "title", "")
+            summary = re.sub("<[^<]+?>", "", getattr(entry, "summary", "")).strip()[:500]
+            source = parsed.feed.get("title", url)
+            risk = injection_risk(f"{title} {summary}")
+            if risk:
+                quarantined.append((title[:70], source, risk))
+                continue
             items.append({
-                "title": getattr(entry, "title", ""),
-                "summary": re.sub("<[^<]+?>", "", getattr(entry, "summary", "")).strip()[:500],
+                "title": title,
+                "summary": summary,
                 "link": getattr(entry, "link", ""),
-                "source": parsed.feed.get("title", url),
+                "source": source,
             })
+
+    if quarantined:
+        print(f"  !! {len(quarantined)} item(s) quarantined - text resembling prompt injection:")
+        for title, source, pattern in quarantined:
+            print(f"     [{source}] {title}")
+            print(f"       matched: {pattern}")
     return items
 HISTORY_PATH = os.path.join(DOCS_DIR, "covered_links.json")
 
@@ -121,6 +166,28 @@ round-up before going deeper on one or two; occasionally include a short
 AI, discuss what AI's impact on the story's topic might be. Keep it
 conversational and avoid the hosts repeating each other's points. Include a
 short intro (welcome + today's date) and a short sign-off.
+
+ACCURACY AND LEGAL CARE (these matter more than the writing):
+- Never invent a number, a name, a quote, a firm's position or an outcome that is
+  not in the supplied stories. If a detail is missing, have a host say so plainly.
+- Name your source out loud when you introduce a story: "Estate Agent Today is
+  reporting...", "according to Today's Conveyancer...". Every story, every time.
+- The dangerous claims are insolvency or administration, SRA, FCA, Trading Standards
+  or Ombudsman investigations, enforcement action, negligence claims, fraud, and
+  misconduct by a named firm or person. Only state one if the supplied story states
+  it, and attribute it in the same sentence. Never as a bare assertion.
+- Never upgrade a hedge. "Reportedly", "alleged", "is understood to", "faces
+  scrutiny over" must survive into the script. An allegation is not a finding, an
+  investigation is not a verdict, a warning is not a collapse.
+- Never speculate about a named firm's solvency or survival, or about why a named
+  individual left a role. Say what is known, attribute it, and stop.
+- Name company principals and public figures acting in their public roles. Do not
+  name junior staff, clients, buyers, sellers or private individuals who appear
+  incidentally in a story.
+- Give no regulated advice. Mortgage advice is FCA-regulated and legal advice is
+  SRA-regulated, and this show is neither. Report what happened and what it might
+  mean commercially for an agency or a firm. Never tell a listener what to do about
+  a specific case, transaction or client.
 
 Do NOT write any sponsor message, advertisement, or disclaimer about AI or
 accuracy. A fixed sponsor read and disclaimer are added automatically before
@@ -275,6 +342,16 @@ def tracked_url(url, config):
     return prefix.rstrip("/") + "/" + url
 
 
+def corrections_line(config):
+    """A visible, working route to report an error. Acting on a complaint quickly is
+    the cheapest defence there is; being unreachable is what escalates one."""
+    policy = (config.get("corrections_policy") or "").strip()
+    email = (config.get("corrections_email") or "").strip()
+    if not policy:
+        return ""
+    return policy.replace("{email}", email) if email else policy
+
+
 def update_feed(config, episode_meta):
     os.makedirs(DOCS_DIR, exist_ok=True)
     episodes = []
@@ -303,8 +380,9 @@ def update_feed(config, episode_meta):
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
   <channel>
     <title>{saxutils.escape(config['podcast_title'])}</title>
-    <description>{saxutils.escape(config['podcast_description'])}</description>
+    <description>{saxutils.escape((config['podcast_description'] + " " + corrections_line(config)).strip())}</description>
     <language>{config['podcast_language']}</language>
+    <managingEditor>{saxutils.escape(config.get('corrections_email', ''))} ({saxutils.escape(config['podcast_author'])})</managingEditor>
     <itunes:author>{saxutils.escape(config['podcast_author'])}</itunes:author>
     <itunes:explicit>false</itunes:explicit>
     <itunes:image href="{saxutils.escape(cover_url)}" />
@@ -353,6 +431,7 @@ def main():
             "Today's AI-in-property discussion, generated from the day's UK estate agency "
             "and conveyancing news. "
             + (config.get("disclaimer_text") or "").strip()
+            + (" " + corrections_line(config) if corrections_line(config) else "")
         ),
         "pub_date": datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT"),
         "audio_url": audio_url,
