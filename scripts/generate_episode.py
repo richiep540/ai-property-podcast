@@ -193,6 +193,12 @@ Do NOT write any sponsor message, advertisement, or disclaimer about AI or
 accuracy. A fixed sponsor read and disclaimer are added automatically before
 and after your script, so writing your own would duplicate them.
 
+Spell out EVERY number, price, percentage and date in words. A text-to-speech
+engine reads this aloud and mangles digits, commas and currency symbols:
+"£2,371" gets read as "two pounds, three hundred and seventy one". Write
+"two thousand three hundred and seventy one pounds", "twelve percent",
+"four hundred and fifty thousand pounds", "twenty twenty six".
+
 Respond with ONLY a JSON array, no other text, no markdown fences. Each element:
 {{"speaker": "{host_a}" or "{host_b}", "text": "..."}}
 """
@@ -258,6 +264,137 @@ def synthesize_turn(text, voice_name, language_code):
     return base64.b64decode(audio_b64)
 
 
+# ------------------------------------------------- speech normalisation
+
+ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+        "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+        "eighteen", "nineteen"]
+TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+SCALES = [(1_000_000_000, "billion"), (1_000_000, "million"), (1_000, "thousand")]
+
+
+def _under_hundred(n):
+    if n < 20:
+        return ONES[n]
+    tens, ones = divmod(n, 10)
+    return TENS[tens] + (f" {ONES[ones]}" if ones else "")
+
+
+def _under_thousand(n):
+    hundreds, rest = divmod(n, 100)
+    if not hundreds:
+        return _under_hundred(rest)
+    out = f"{ONES[hundreds]} hundred"
+    return out + (f" and {_under_hundred(rest)}" if rest else "")
+
+
+def number_to_words(n):
+    if n == 0:
+        return "zero"
+    parts = []
+    for value, name in SCALES:
+        if n >= value:
+            count, n = divmod(n, value)
+            parts.append(f"{_under_thousand(count)} {name}")
+    if n:
+        parts.append(("and " if parts and n < 100 else "") + _under_thousand(n))
+    return " ".join(parts)
+
+
+ORDINALS = {1: "first", 2: "second", 3: "third", 5: "fifth", 8: "eighth", 9: "ninth", 12: "twelfth"}
+
+
+def ordinal_to_words(n):
+    if n in ORDINALS:
+        return ORDINALS[n]
+    words = number_to_words(n)
+    last = words.rsplit(" ", 1)[-1]
+    head = words[: len(words) - len(last)]
+    suffixed = {"one": "first", "two": "second", "three": "third", "five": "fifth",
+                "eight": "eighth", "nine": "ninth", "twelve": "twelfth"}.get(last)
+    if suffixed:
+        return head + suffixed
+    if last.endswith("y"):
+        return head + last[:-1] + "ieth"
+    return head + last + "th"
+
+
+def year_to_words(n):
+    if 2000 <= n <= 2009:
+        return "two thousand" + (f" and {ONES[n - 2000]}" if n % 10 else "")
+    first, second = divmod(n, 100)
+    if second == 0:
+        return f"{_under_hundred(first)} hundred"
+    return f"{_under_hundred(first)} {'oh ' + ONES[second] if second < 10 else _under_hundred(second)}"
+
+
+CURRENCY = {"£": "pounds", "$": "dollars", "€": "euros"}
+SUFFIXES = {"k": "thousand", "m": "million", "bn": "billion", "b": "billion"}
+UNITS = {
+    "mm": "millimetres", "cm": "centimetres", "km": "kilometres", "m": "metres",
+    "kg": "kilograms", "lb": "pounds", "lbs": "pounds", "ft": "feet",
+    "mph": "miles per hour", "kph": "kilometres per hour", "km/h": "kilometres per hour",
+}
+
+
+def _digits_to_words(raw):
+    """'12,500' -> 'twelve thousand five hundred'; '9.5' -> 'nine point five'."""
+    raw = raw.replace(",", "")
+    if "." in raw:
+        whole, frac = raw.split(".", 1)
+        whole_words = number_to_words(int(whole)) if whole else "zero"
+        frac_words = " ".join(ONES[int(d)] for d in frac if d.isdigit())
+        return f"{whole_words} point {frac_words}"
+    return number_to_words(int(raw))
+
+
+def normalize_for_speech(text):
+    """Safety net for anything Claude left as digits or symbols — TTS reads these badly."""
+    text = re.sub(r"https?://\S+|www\.\S+", "", text)
+    text = re.sub(r"[\*\_`#\[\]]", "", text)
+    text = text.replace("&", " and ").replace("…", "...").replace("—", ", ").replace("–", "-")
+
+    # Currency, optionally with a k/m/bn suffix: £2.5m -> two point five million pounds
+    def _currency(m):
+        unit = CURRENCY[m.group(1)]
+        amount = _digits_to_words(m.group(2))
+        scale = SUFFIXES.get((m.group(3) or "").lower())
+        return f"{amount} {scale} {unit}" if scale else f"{amount} {unit}"
+
+    # The suffix group must not swallow the following space when there is no suffix.
+    text = re.sub(r"([£$€])\s?(\d+(?:,\d{3})*(?:\.\d+)?)(?:\s?(bn|[kmb])\b)?", _currency, text, flags=re.I)
+    text = re.sub(r"(\d+(?:,\d{3})*(?:\.\d+)?)\s?%", lambda m: f"{_digits_to_words(m.group(1))} percent", text)
+
+    # Units usually run straight into the digits ("140mm"), so handle them before
+    # the generic number pass — \b would not fire between "0" and "m".
+    unit_pattern = "|".join(sorted((re.escape(u) for u in UNITS), key=len, reverse=True))
+    text = re.sub(
+        rf"(?<![\w.])(\d+(?:,\d{3})*(?:\.\d+)?)\s?({unit_pattern})(?![\w])",
+        lambda m: f"{_digits_to_words(m.group(1))} {UNITS[m.group(2).lower()]}",
+        text, flags=re.I,
+    )
+
+    # "in" only counts as inches when glued to the digits — "5 in the morning" is not.
+    text = re.sub(r"(?<![\w.])(\d+(?:,\d{3})*(?:\.\d+)?)in(?![\w])",
+                  lambda m: f"{_digits_to_words(m.group(1))} inches", text, flags=re.I)
+
+    text = re.sub(r"\b(\d+)(st|nd|rd|th)\b", lambda m: ordinal_to_words(int(m.group(1))), text, flags=re.I)
+    text = re.sub(r"\b(19|20)(\d{2})\b", lambda m: year_to_words(int(m.group(0))), text)
+
+    def _plain(m):
+        try:
+            words = _digits_to_words(m.group(0))
+        except (ValueError, IndexError, KeyError):
+            return m.group(0)
+        # Keep a gap if the number was glued to a word, e.g. "50cc" -> "fifty cc".
+        tail = m.string[m.end():m.end() + 1]
+        return words + (" " if tail.isalpha() else "")
+
+    # No trailing \b: it would miss digits glued to letters, e.g. "50cc", "10x".
+    text = re.sub(r"(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?", _plain, text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def apply_pronunciations(text, config):
     """Respell words the voice says wrong, just before synthesis.
 
@@ -315,7 +452,7 @@ def build_episode_audio(turns, hosts_by_name, language_code, out_path, config):
                 f"No voice configured for speaker '{turn['speaker']}'. "
                 "Edit config.json 'hosts' with real Google TTS voice names."
             )
-        spoken = apply_pronunciations(turn["text"], config)
+        spoken = apply_pronunciations(normalize_for_speech(turn["text"]), config)
         audio_bytes = synthesize_turn(spoken, voice_name, language_code)
         seg_path = os.path.join(tmp_dir, f"seg_{i}.mp3")
         with open(seg_path, "wb") as f:
